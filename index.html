@@ -1,0 +1,175 @@
+<html>
+<head>
+  <title>3D Physics Playground</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stats.js@0.17.0/build/stats.min.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { width: 100%; height: 100%; }
+    #controls {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0,0,0,0.7);
+      padding: 15px;
+      border-radius: 8px;
+      color: white;
+    }
+    button {
+      background: #2196F3;
+      border: none;
+      padding: 8px 15px;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover { background: #1976D2; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <button onclick="addSphere()">Add Sphere</button>
+    <button onclick="addBox()">Add Box</button>
+    <button onclick="resetScene()">Reset</button>
+  </div>
+
+  <script>
+    let camera, scene, renderer, world;
+    let physicsBodies = [];
+    let meshes = [];
+    let stats;
+
+    function init() {
+      // Three.js setup
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // Physics world setup
+      world = new CANNON.World();
+      world.gravity.set(0, -9.82, 0);
+      world.solver.iterations = 10;
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0x404040);
+      scene.add(ambientLight);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+      directionalLight.position.set(10, 15, 10);
+      scene.add(directionalLight);
+
+      // Camera position
+      camera.position.set(0, 5, 15);
+      camera.lookAt(0, 0, 0);
+
+      // Ground plane
+      addGround();
+      
+      // Stats
+      stats = new Stats();
+      document.body.appendChild(stats.dom);
+
+      // Event listeners
+      window.addEventListener('resize', onWindowResize, false);
+    }
+
+    function addGround() {
+      // Three.js mesh
+      const groundGeometry = new THREE.PlaneGeometry(20, 20);
+      const groundMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 });
+      const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+      groundMesh.rotation.x = -Math.PI / 2;
+      scene.add(groundMesh);
+
+      // Physics body
+      const groundShape = new CANNON.Plane();
+      const groundBody = new CANNON.Body({ mass: 0 });
+      groundBody.addShape(groundShape);
+      groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+      world.addBody(groundBody);
+    }
+
+    function addSphere() {
+      const radius = 1;
+      
+      // Three.js mesh
+      const geometry = new THREE.SphereGeometry(radius);
+      const material = new THREE.MeshPhongMaterial({ color: Math.random() * 0xffffff });
+      const mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+      meshes.push(mesh);
+
+      // Physics body
+      const shape = new CANNON.Sphere(radius);
+      const body = new CANNON.Body({ mass: 1 });
+      body.addShape(shape);
+      body.position.set(
+        Math.random() * 4 - 2,
+        10,
+        Math.random() * 4 - 2
+      );
+      physicsBodies.push(body);
+      world.addBody(body);
+    }
+
+    function addBox() {
+      const size = 1;
+      
+      // Three.js mesh
+      const geometry = new THREE.BoxGeometry(size, size, size);
+      const material = new THREE.MeshPhongMaterial({ color: Math.random() * 0xffffff });
+      const mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+      meshes.push(mesh);
+
+      // Physics body
+      const shape = new CANNON.Box(new CANNON.Vec3(size/2, size/2, size/2));
+      const body = new CANNON.Body({ mass: 1 });
+      body.addShape(shape);
+      body.position.set(
+        Math.random() * 4 - 2,
+        10,
+        Math.random() * 4 - 2
+      );
+      physicsBodies.push(body);
+      world.addBody(body);
+    }
+
+    function resetScene() {
+      meshes.forEach(mesh => scene.remove(mesh));
+      physicsBodies.forEach(body => world.remove(body));
+      meshes = [];
+      physicsBodies = [];
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      stats.update();
+
+      // Update physics
+      world.step(1/60);
+
+      // Sync Three.js meshes with physics bodies
+      for (let i = 0; i < meshes.length; i++) {
+        meshes[i].position.copy(physicsBodies[i].position);
+        meshes[i].quaternion.copy(physicsBodies[i].quaternion);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    init();
+    animate();
+  </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
